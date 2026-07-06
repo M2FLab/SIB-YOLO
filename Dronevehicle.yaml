@@ -1,0 +1,21 @@
+# DroneVehicle 数据集配置
+path: /home/ubuntu22/桌面/datasets/DroneVehicles # 数据集根目录（绝对路径）
+train: images/train  # 训练集可见光图片路径（相对于 path）
+val: images/val      # 验证集可见光图片路径（相对于 path）
+test: images/test    # 测试集可见光图片路径（相对于 path）
+
+# 红外图像路径（多模态必需）
+train_ir: image/train  # 训练集红外图片路径
+val_ir: image/val      # 验证集红外图片路径
+test_ir: image/test    # 测试集红外图片路径
+
+# 类别名称
+names:
+ 0: car
+ 1: bus
+ 2: van
+ 3: truck
+ 4: feright_car
+
+# 多模态设置（RGB+红外）
+nc: 5  # 类别数量

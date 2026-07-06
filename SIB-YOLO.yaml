@@ -1,0 +1,88 @@
+
+# Parameters
+ch: 6
+nc: 5  # DroneVehicle 类别数
+scales:
+   n: [0.33, 0.25, 1024]   # n 模型缩放
+
+backbone:
+  # [from, repeats, module, args]
+  - [-1, 1, IN, []]               # 0
+  - [-1, 1, Multiin, [1]]         # 1
+  - [-2, 1, Multiin, [2]]         # 2
+
+  # ---- 双流 Backbone ----
+  # 可见光分支
+  - [1, 1, Conv, [64, 3, 2]]      # 3-P1/2
+  - [-1, 1, Conv, [128, 3, 2]]    # 4-P2/4
+  - [-1, 3, C2f, [128, True]]     # 5
+  # 红外分支
+  - [2, 1, Conv, [ 64, 3, 2 ] ]   # 6-P1/2
+  - [-1, 1, Conv, [ 128, 3, 2 ] ] # 7-P2/4
+  - [-1, 3, C2f, [ 128, True ] ]  # 8
+
+  # ---- P3/8 ----
+  - [5, 1, Conv, [256, 3, 2]]     # 9-P3/8-visible
+  - [8, 1, Conv, [256, 3, 2]]     # 10-P3/8-infrared
+  - [-2, 6, C2f, [256, True]]     # 11-P3/8 visible
+  - [-2, 6, C2f, [256, True]]     # 12-P3/8 infrared
+
+  # ✅ P3/8 
+  - [[-2, -1], 1, ODCF, []]  # 13-P3/8
+  - [[11, 13], 1, FeatureAdd, []]  # 14-P3/8 vis+Enhanced
+  - [[12, 13], 1, FeatureAdd, []]  # 15-P3/8 inf+Enhanced
+
+  # ---- P4/16 ----
+  - [-2, 1, Conv, [512, 3, 2]]    # 16-P4/16 visible (从14)
+  - [-2, 1, Conv, [512, 3, 2]]    # 17-P4/16 infrared (从15)
+  - [-2, 6, C2f, [512, True]]     # 18-P4/16 visible
+  - [-2, 6, C2f, [512, True]]     # 19-P4/16 infrared
+
+  # ✅ P4/16 
+  - [[-2, -1], 1, ODCF, []]  # 20-P4/16
+  - [[18, 20], 1, FeatureAdd, []]  # 21-P4/16 vis+Enhanced
+  - [[19, 20], 1, FeatureAdd, []]  # 22-P4/16 inf+Enhanced
+
+  # ---- P5/32 ----
+  - [-2, 1, Conv, [1024, 3, 2]]   # 23-P5/32 visible (从22)
+  - [-2, 1, Conv, [1024, 3, 2]]   # 24-P5/32 infrared (从23)
+  - [-2, 3, C2f, [1024, True]]    # 25-P5/32 visible
+  - [-2, 3, C2f, [1024, True]]    # 26-P5/32 infrared
+
+  # ✅ P5/32 
+  - [[-2, -1], 1,  ODCF, []] # 27-P5/32
+  - [[25, 27], 1, FeatureAdd, []]  # 28-P5/32 vis+Enhanced
+  - [[26, 27], 1, FeatureAdd, []]  # 29-P5/32 inf+Enhanced
+
+  - [28, 1, SPPF, [1024, 5]]      # 30-P5/32 visible (从28)
+  - [29, 1, SPPF, [1024, 5]]      # 31-P5/32 infrared (从29)
+
+
+  - [[14, 15], 1, Concat, [1]]     # 32 P3: 256+256=512
+  - [[21, 22], 1, Concat, [1]]     # 33 P4: 512+512=1024
+  - [[30, 31], 1, Concat, [1]]     # 34 P5: 1024+1024=2048
+
+
+head:
+  # P5 -> P4 上采样
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]        
+  - [[-1, 33], 1, Concat, [1]]                         
+  - [-1, 3, C2f, [512]]                                
+
+  # P4 -> P3 上采样
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]         
+  - [[-1, 32], 1, Concat, [1]]                        
+  - [-1, 3, C2f, [256]]                                
+
+  # P3 -> P4 PAN 下采样
+  - [-1, 1, Conv, [256, 3, 2]]                         
+  - [[-1, 37], 1, Concat, [1]]                         
+  - [-1, 3, C2f, [512]]                               
+
+  # P4 -> P5 PAN 下采样
+  - [-1, 1, Conv, [512, 3, 2]]                        
+  - [[-1, 34], 1, Concat, [1]]                         
+  - [-1, 3, C2f, [1024]]                               
+
+  # 检测头
+  - [[40, 43, 46], 1, Detect, [nc]]                    
